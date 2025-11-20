@@ -14,6 +14,7 @@ defmodule LighthouseServer do
 
   def report, do: GenServer.call(:lighthouse, :report)
 
+
   @impl true
   def init(_state) do
     # The initial_state is an empty list
@@ -23,7 +24,7 @@ defmodule LighthouseServer do
 
     # %{id: id, coords: {x, y}, status: :nil} <- SHIP'S STATE
     # [ship1, ship2...] <- LHS state
-
+    automatic_report()
     {:ok, []}
   end
 
@@ -37,6 +38,20 @@ defmodule LighthouseServer do
   @impl true
   def handle_call(:report, _from, state) do
     fleet = state
-    {:reply, fleet, state}
+    {:reply, fleet, fleet}
+  end
+
+  @impl true
+  def handle_info(:report, state) do
+    IO.puts("-------------- REPORT -----------")
+    IO.puts(inspect(state))
+    IO.puts("-------------- end -----------")
+    automatic_report()
+    {:noreply, state}
+  end
+
+
+  defp automatic_report do
+    Process.send_after(self(), :report, 20_000)
   end
 end
