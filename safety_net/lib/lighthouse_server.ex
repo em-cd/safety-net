@@ -1,5 +1,10 @@
 defmodule LighthouseServer do
-  # "LighthouseServer" might be written as "LHS" in the comments
+  @moduledoc """
+  LighthouseServer might be written as LHS.
+  state = []
+  When adding ships, it becomes a list of maps.
+  """
+
   use GenServer
 
   def start_link do
@@ -7,40 +12,81 @@ defmodule LighthouseServer do
     GenServer.start_link(LighthouseServer,[], name: :lighthouse)
   end
 
+
+  @doc """
+  Requests to add a ship to the state of the LHS.
+   ship : %{id: int, coords: {x,y}, status: :liveness}
+  """
   def add_ship(ship) do
-    #at spawn, each ship has to run this to be added to the LHS
+
     GenServer.cast(:lighthouse, {:add_ship, ship})
   end
 
+  @doc """
+  Requests to update the ship's informations on the LHS's state
+  """
+  def update_ship(ship) do
+    GenServer.cast(:lighthouse, {:update, ship})
+
+  end
+
+  @doc """
+  Requests the LHS state
+  """
   def report, do: GenServer.call(:lighthouse, :report)
+
+
 
 
   @impl true
   def init(_state) do
-    # The initial_state is an empty list
-    # in which maps (id/coords/status) are added.
-    # This way, each map identifies a ship and its state,
-    # whilest the LHS-list will effectively represent the fleet's states
-
-    # %{id: id, coords: {x, y}, status: :nil} <- SHIP'S STATE
-    # [ship1, ship2...] <- LHS state
     automatic_report()
     {:ok, []}
   end
 
-  # handle_cast receives from the fleet and sends to
+  # callbacks --------------
+
+  @doc """
+  Handles ADD_ship(ship) request.
+  """
   @impl true
   def handle_cast({:add_ship, ship}, state) do
     new_state = [ship | state]
     {:noreply, new_state}
   end
 
+
+  # Handles UPDATE_ship(ship) request. (I don't know why VSC doesn't like a doc here)
+  @impl true
+  def handle_cast({:update, ship}, state) do
+
+    new_state =
+      Enum.map(state, fn ship_in_list ->
+        if ship_in_list.id == ship.id do
+
+          Map.merge(ship_in_list, ship)
+
+        else
+          ship_in_list
+        end
+      end)
+      {:noreply, new_state}
+  end
+
+  @doc """
+  Handles the REPORT request. (not actually in use)
+  """
   @impl true
   def handle_call(:report, _from, state) do
     fleet = state
     {:reply, fleet, fleet}
   end
 
+
+  @doc """
+  Handles the automatic report printing (a defp).
+  Prints out the current list of ships.
+  """
   @impl true
   def handle_info(:report, state) do
     IO.puts("-------------- REPORT -----------")

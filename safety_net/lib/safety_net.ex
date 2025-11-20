@@ -7,4 +7,6 @@ def initiate do
   LighthouseServer.add_ship(%{id: 3, status: :alive, coords: {1, 0}})
   LighthouseServer.add_ship(%{id: 4, status: :alive, coords: {1, 1}})
 end
+
+
 end
