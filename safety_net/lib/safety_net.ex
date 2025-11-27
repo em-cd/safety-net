@@ -51,6 +51,23 @@ defmodule Ship do
     Process.send_after(self(), :chopchop, 5_000)
   end
 
+
+  # ---------------------- FIND THE CLOSEST SHIP
+  # this assumes the recerived message carries the trigger :search, the state of the sender
+  # and the state of the missing ship
+  # {:search, sender_distance_vector, missing  -> {id, coords, state}}
+
+  # if sqrt(x1_x2**2 + y1_y2**2) < sender_distance_vector:
+  #   send(sender, :ack): Don't worry I'm closer than you
+  #   send(:search, next, my_vector, missing): hey, are you closer than me?
+  def check_distance do
+      GenServer.call(self(), :search)
+  end
+
+#  def handle_call(:search, from, state) do
+
+ # end
+
 end
 
 
@@ -66,21 +83,4 @@ defmodule Demo do
     Ship.start_link({2, {2, 2}, :alive})
     Ship.start_link({3, {3, 3}, :PIRATES})
   end
-
-
-end
-
-
-
-defmodule Core do
-def initiate do
-  LighthouseServer.start_link()
-
-  LighthouseServer.add_ship(%{id: 1, status: :alive, coords: {0, 0}})
-  LighthouseServer.add_ship(%{id: 2, status: :alive, coords: {0, 1}})
-  LighthouseServer.add_ship(%{id: 3, status: :alive, coords: {1, 0}})
-  LighthouseServer.add_ship(%{id: 4, status: :alive, coords: {1, 1}})
-end
-
-
 end
