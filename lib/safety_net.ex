@@ -1,13 +1,55 @@
-defmodule SafetyNet do
+defmodule ShipNode do
   @moduledoc """
   Documentation for `SafetyNet`.
   """
+use GenServer
 
-def start() do
-    pid = spawn(__MODULE__, :handler, [])
-    Process.register(pid, :handler)
-    send(:handler, {:init})
-    pid
+defstruct [:id, :data, :peers, :coords]
+
+def start_link(id, peers \\ [], coords \\ {0, 0}) do
+  GenServer.start_link(__MODULE__, {id, peers, coords}, name: via(id))
+end
+
+defp via(id), do: {:via, Registry, {SafetyNet, id}}
+
+@impl true
+def init({id, peers, coords}) do
+  state = %__MODULE__{
+    id: id,
+    data: %{},
+    peers: peers,
+    coords: coords
+  }
+
+  {:ok, state}
+end
+
+
+
+
+  def demo_setup() do
+    ships = [:A, :B, :C, :D, :E]
+
+    case Registry.start_link(keys: :unique, name: SafetyNet) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
+
+    Enum.each(ships, fn node ->
+      case Registry.lookup(SafetyNet, node) do
+        [{pid, _}] -> GenServer.stop(pid)
+        [] -> :ok
+      end
+    end)
+
+    # Start all nodes with peer connections
+    {:ok, _} = ShipNode.start_link(:A, [:B, :C], {1, 1})
+    {:ok, _} = ShipNode.start_link(:B, [:A, :C, :D], {0, 4})
+    {:ok, _} = ShipNode.start_link(:C, [:A, :B, :E], {8, 3})
+    {:ok, _} = ShipNode.start_link(:D, [:B, :E], {3, 7})
+    {:ok, _} = ShipNode.start_link(:E, [:C, :D], {2, 5})
+
+    "Network initialized! 5 ships with different initial data."
   end
 
   def handler() do
@@ -73,7 +115,7 @@ def start() do
     end)
   end
 
-  def wait_for_nodes() do
+  defp wait_for_nodes() do
     case Node.list() do
       [] ->
         :timer.sleep(500)
