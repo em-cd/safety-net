@@ -19,7 +19,7 @@ defmodule Ship do
     }
     LighthouseServer.add_ship(state)
     IO.puts("adding ship #{id} to the fleet")
-
+    time_to_move()
     {:ok, state}
   end
 
@@ -32,7 +32,29 @@ defmodule Ship do
     {:reply, state, state}
 
   end
+
+  # ------------------------------- MOVEMENT
+  @impl true
+  def handle_info(:chopchop, state) do
+    %Ship{coords: {old_x, old_y}} = state
+
+    new_x = old_x + Enum.random([0 , 1])
+    new_y = old_y + Enum.random([-1 ,0 , 1])
+    new_state = %{state | coords: {new_x, new_y}}
+
+    LighthouseServer.update_ship(new_state)
+    time_to_move()
+    {:noreply, new_state}
+  end
+
+  defp time_to_move do
+    Process.send_after(self(), :chopchop, 5_000)
+  end
+
 end
+
+
+
 
 defmodule Demo do
 

@@ -47,16 +47,17 @@ defmodule LighthouseServer do
   # callbacks --------------
 
   @doc """
-  Handles ADD_ship(ship) request.
+  :add_ship -> handles the add_ship function
+  :update -> handles all the updates of a ship (coordinates or liveness)
   """
+  # ADD SHIP
   @impl true
   def handle_cast({:add_ship, ship}, state) do
     new_state = [ship | state]
     {:noreply, new_state}
   end
 
-
-  # Handles UPDATE_ship(ship) request. (I don't know why VSC doesn't like a doc here)
+  # UPDATE
   @impl true
   def handle_cast({:update, ship}, state) do
 
@@ -98,6 +99,6 @@ defmodule LighthouseServer do
 
 
   defp automatic_report do
-    Process.send_after(self(), :report, 20_000)
+    Process.send_after(self(), :report, 10_000)
   end
 end
