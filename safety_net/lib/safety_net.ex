@@ -17,6 +17,8 @@ defmodule Ship do
       coords: coordinates,
       status: status
     }
+    LighthouseServer.add_ship(state)
+    IO.puts("adding ship #{id} to the fleet")
 
     {:ok, state}
   end
@@ -32,7 +34,19 @@ defmodule Ship do
   end
 end
 
+defmodule Demo do
 
+  def initiate do
+    LighthouseServer.start_link()
+
+    Process.sleep(100)
+    Ship.start_link({1, {1, 1}, :alive})
+    Ship.start_link({2, {2, 2}, :alive})
+    Ship.start_link({3, {3, 3}, :PIRATES})
+  end
+
+
+end
 
 
 
