@@ -2,28 +2,27 @@ defmodule ShipNode do
   @moduledoc """
   Documentation for `SafetyNet`.
   """
-use GenServer
+  use GenServer
 
-defstruct [:id, :data, :peers, :coords]
+  defstruct [:id, :data, :peers, :coords]
 
-def start_link(id, peers \\ [], coords \\ {0, 0}) do
-  GenServer.start_link(__MODULE__, {id, peers, coords}, name: via(id))
-end
+  def start_link(id, peers \\ [], coords \\ {0, 0}) do
+    GenServer.start_link(__MODULE__, {id, peers, coords}, name: via(id))
+  end
 
-defp via(id), do: {:via, Registry, {SafetyNet, id}}
+  defp via(id), do: {:via, Registry, {SafetyNet, id}}
 
-@impl true
-def init({id, peers, coords}) do
-  state = %__MODULE__{
-    id: id,
-    data: %{},
-    peers: peers,
-    coords: coords
-  }
+  @impl true
+  def init({id, peers, coords}) do
+    state = %__MODULE__{
+      id: id,
+      data: %{},
+      peers: peers,
+      coords: coords
+    }
 
-  {:ok, state}
-end
-
+    {:ok, state}
+  end
 
 
 
