@@ -86,7 +86,7 @@ defmodule SafetyNet do
     new_y = old_y + Enum.random([-1 ,0 , 1])
     new_state = %{state | coords: {new_x, new_y}}
 
-    LighthouseServer.update_ship(new_state)
+    LighthouseServer.update_ship(own_membership(new_state))
     time_to_move()
     {:noreply, new_state}
   end
