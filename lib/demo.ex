@@ -1,6 +1,10 @@
 defmodule Demo do
 
   def init do
+    LighthouseServer.start_link()
+
+    Process.sleep(100)
+
     ships = [:A, :B, :C, :D, :E]
 
     case Registry.start_link(keys: :unique, name: SafetyNet) do

@@ -16,6 +16,21 @@ Demo.init()
 
 You should see some pings and acks going back and forth between the processes.
 
+This is the expected output from the Lighthouse:
+
+```
+[%Ship{id: 3, coords: {3, 3}, status: :PIRATES}, %Ship{id: 2, coords: {2, 2}, status: :alive}, %Ship{id: 1, coords: {1, 1}, status: :alive}]
+```
+
+You can verify the PIDs with:
+
+```iex
+GenServer.whereis({:global, 1}) # <- for ships
+#PID<0.200.0>
+
+GenServer.whereis(:lighthouse) # <- for the lighthouse
+#PID<0.199.0>
+```
 
 ## Installation
 
@@ -33,4 +48,3 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/safety_net>.
-
