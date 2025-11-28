@@ -2,34 +2,19 @@
 
 ## Running the code
 
-To try out SafetyNet, you will need at least two remote nodes that will communicate with each other. Open a terminal and start a node in a Beam VM:
+First start the Mix project in iex:
 
 ```bash
-iex --sname node1 --cookie secret -S mix
+iex -S mix
 ```
 
-Open a second terminal and start a second node:
-
-```bash
-iex --sname node2 --cookie secret -S mix
-```
-
-Now we need to connect the two. In the the first terminal, enter:
+You can now initialise a demo with:
 
 ```elixir
-Node.connect(:"node2@hostname")
-Node.list()
+Demo.init()
 ```
 
-If the nodes were successfully connected, you should see the other node's name appear in the list. If you aren't sure about the node hostname, you can type `Node.self()` inside the IEX shell to see a node's name and hostname.
-
-Now your nodes are connected, start the application in each node's terminal:
-
-```elixir
-SafetyNet.start()
-```
-
-You should now see some pings and acks going back and forth between the nodes.
+You should see some pings and acks going back and forth between the processes.
 
 
 ## Installation
