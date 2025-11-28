@@ -38,8 +38,8 @@ defmodule SafetyNet do
 
     state = %__MODULE__{
       id: id,
-      peers: peer_map,
-      coords: coords
+      coords: coords,
+      peers: peer_map
     }
 
     LighthouseServer.add_ship(own_membership(state))
@@ -50,14 +50,19 @@ defmodule SafetyNet do
   end
 
   @impl true
-  def handle_cast({:ping, from_id, from_pid, _gossip}, state) do
+  def handle_cast({:ping, from_id, from_pid, gossip}, state) do
     IO.puts("#{state.id}: received ping from #{from_id}, sending ack")
-    send(from_pid, {:ack, state.id})
-    {:noreply, state}
+
+    # Merge data
+    new_state = merge_gossip(state, gossip)
+
+    send(from_pid, {:ack, state.id, prepare_gossip(new_state)})
+    {:noreply, new_state}
   end
 
   @impl true
   def handle_info(:probe, state) do
+    IO.puts(inspect(state.peers))
     # Pick a random peer and ping them
     # TODO: only pick alive nodes to ping
     if state.peers do
@@ -87,9 +92,11 @@ defmodule SafetyNet do
   end
 
   @impl true
-  def handle_info({:ack, from}, state) do
+  def handle_info({:ack, from, gossip}, state) do
     IO.puts("#{state.id}: received ack from #{from}")
-    {:noreply, state}
+    # Merge data
+    new_state = merge_gossip(state, gossip)
+    {:noreply, new_state}
   end
 
   defp schedule_probe do
@@ -111,5 +118,15 @@ defmodule SafetyNet do
       coords: state.coords,
       status: :alive
     }
+  end
+
+  defp merge_gossip(state, gossip) do
+    new_peers = Enum.reduce(gossip, state.peers, fn %{id: id, coords: coords, status: status}, acc ->
+      Map.update(acc, id, %{coords: coords, status: status}, fn _ ->
+        %{coords: coords, status: status}
+      end)
+    end)
+
+    %{state | peers: new_peers}
   end
 end
