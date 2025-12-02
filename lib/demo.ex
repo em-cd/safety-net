@@ -28,4 +28,10 @@ defmodule Demo do
 
     "Network initialized! 5 ships with different initial data."
   end
+
+  def e_missing do
+    SafetyNet.check_distance?(%{id: :D, peers: [:B, :E], coords: {3, 7}, status: :alive},%{id: :E, peers: [:C, :D], coords: {2, 5}, status: :missing})
+
+  end
+
 end

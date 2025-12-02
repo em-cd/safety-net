@@ -79,12 +79,8 @@ defmodule LighthouseServer do
   """
   @impl true
   def handle_call(:report, _from, state) do
-    fleet = Enum.map(state, fn ship_in_list ->
-      %{id: ship_in_list.id,
-      coords: ship_in_list.coords,
-      status: ship_in_list.status
-    }
-    end)
+    fleet = state
+
 
     {:reply, fleet, state}
   end
@@ -107,7 +103,7 @@ defmodule LighthouseServer do
     IO.puts("-------------- REPORT -----------")
     Enum.each(fleet, fn ship_map ->
     IO.puts(inspect(ship_map))
-  end)
+    end)
     IO.puts("-------------- end -----------")
     automatic_report()
     {:noreply, state}
