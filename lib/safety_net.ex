@@ -135,7 +135,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
       IO.puts("#{my_state.id}: I'm at #{distance} clicks")
 
       # compare distance
-      if distance < d do
+      if distance <= d do
         IO.puts("#{my_state.id}: I'm closer")
         GenServer.cast(via(my_state.id), {:update_state, :closest})
         GenServer.cast(via(closest_ship.id), {:update_state, :visited})
@@ -145,7 +145,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
       else
         IO.puts("#{my_state.id}: I'm too far. I'll ask around")
 
-        ask_peers(closest_ship, missing, d)
+        ask_peers(my_state, missing, d)
         end
       {:noreply, my_state}
     end
