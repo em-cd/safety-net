@@ -196,7 +196,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     {:noreply, %{state | pending: pending}}
   end
 
-  # Handle ack: remove from pending list and forward to requesting node if necessary
+  # Handle ack: remove node from pending list and forward to requesting node if necessary
   @impl true
   def handle_cast({:ack, from_id, gossip}, state) do
     state = merge_gossip(state, gossip)
@@ -278,11 +278,17 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     Map.put(state.pending, peer_id, {now, origin_id})
   end
 
+  # Prepares gossip to send with a ping, ping-request or ack message
   defp prepare_gossip(state) do
-    # TODO: pick some peer's updates to share as well as own status
-    [own_membership(state)]
+    peers =
+      state.peers
+      |> Enum.shuffle()
+      |> Enum.take(1) # Change number here to choose how many peers to gossip about
+
+    [own_membership(state) | Enum.map(peers, &peer_membership/1)]
   end
 
+  # Format my state to send as gossip
   defp own_membership(state) do
     %{
       id: state.id,
@@ -291,14 +297,24 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     }
   end
 
+  # Format my peer's state to send as gossip
+  defp peer_membership({id, %{coords: coords, status: status}}) do
+    %{
+      id: id,
+      coords: coords,
+      status: status
+    }
+  end
+
+  # Merge gossip with my state
   defp merge_gossip(state, gossip) do
-    new_peers = Enum.reduce(gossip, state.peers, fn %{id: id, coords: coords, status: status}, acc ->
+    peers = Enum.reduce(gossip, state.peers, fn %{id: id, coords: coords, status: status}, acc ->
       Map.update(acc, id, %{coords: coords, status: status}, fn _ ->
         %{coords: coords, status: status}
       end)
     end)
 
-    %{state | peers: new_peers}
+    %{state | peers: peers}
   end
 
   defp calculate_distance({ship_x, ship_y}, {target_x, target_y}) do
