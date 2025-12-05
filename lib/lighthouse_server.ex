@@ -96,7 +96,8 @@ defmodule LighthouseServer do
     fleet = Enum.map(state, fn ship_in_list ->
       %{id: ship_in_list.id,
       coords: ship_in_list.coords,
-      status: ship_in_list.status
+      status: ship_in_list.status,
+      incarnation: ship_in_list.incarnation
     }
     end)
 
