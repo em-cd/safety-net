@@ -41,7 +41,7 @@ defmodule SafetyNet do
     my_distance = calculate_distance(my_state.coords, missing_ship.coords)
     IO.puts("I'm #{my_distance} clicks far away")
     # set status: :closest
-    GenServer.cast(via(my_state.id), {:update_state, :closest})
+    GenServer.cast({:global, my_state.id}, {:update_state, :closest})
 
     ask_peers(my_state, missing_ship, my_distance)
    end
