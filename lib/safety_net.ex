@@ -7,7 +7,7 @@ defmodule SafetyNet do
   defstruct [:id, :peers, :coords, :status, :pending]
 
   def start_link(id, peers \\ [], coords \\ {0, 0}, status \\ :alive) do
-    GenServer.start_link(__MODULE__, {id, peers, coords, status}, name: via(id))
+    GenServer.start_link(__MODULE__, {id, peers, coords, status}, name: {:global, id})
   end
 
   # State should end up looking like:
@@ -25,7 +25,7 @@ defmodule SafetyNet do
   #     ...
   #   },
   #   pending: %{
-  #     node_id: time_ping_sent
+  #     node_id: {time_ping_sent, ping_origin}
   #   }
   # }
   @impl true
@@ -46,9 +46,9 @@ defmodule SafetyNet do
     }
 
     LighthouseServer.add_ship(state)
-    schedule_probe()
-    # time_to_move()
-    schedule_sweep()
+    schedule(:probe, 0) # Start probing immediately
+    schedule(:sweep, time_between_sweeps())
+    # schedule(:chopchop, time_between_moves)
     {:ok, state}
   end
 
@@ -68,7 +68,7 @@ defmodule SafetyNet do
     my_distance = calculate_distance(my_state.coords, missing_ship.coords)
     IO.puts("I'm #{my_distance} clicks far away")
     # set status: :closest
-    GenServer.cast(via(my_state.id), {:update_state, :closest})
+    GenServer.cast({:global, my_state.id}, {:update_state, :closest})
 
     ask_peers(my_state, missing_ship, my_distance)
    end
@@ -81,42 +81,27 @@ defmodule SafetyNet do
   :search -> after wait() if the ship is still the closest to the missing one, sets its status to :search
   :chopchop -> makes the ships move . It's called by time_to_move()
   """
-  # Ping a random peer
+  # Pick a random peer and ping them
   @impl true
   def handle_info(:probe, state) do
-    # IO.puts(inspect(state.peers))
-    # Pick a random peer and ping them
-    # TODO: only pick alive nodes to ping
     pending =
       case state.peers do
         [] ->
           state.pending
         peers ->
+          # TODO: only pick alive nodes to ping
           {peer_id, _peer_data} = Enum.random(peers)
-          gossip = prepare_gossip(state)
-          GenServer.cast(via(peer_id), {:ping, state.id, self(), gossip})
-          # Store the information that we are awaiting an ack from this node
-          now = System.monotonic_time(:millisecond)
-          Map.put(state.pending, peer_id, now)
+          send_ping(peer_id, state.id, state)
       end
 
-    schedule_probe()
-    {:noreply, %{state | pending: pending}}
-  end
-
-
-  # Receive an ack along with some gossip and delete the sender from the list of pending acks.
-  @impl true
-  def handle_info({:ack, from, gossip}, state) do
-    state = merge_gossip(state, gossip)
-    pending = Map.delete(state.pending, from)
+    schedule(:probe, protocol_period())
     {:noreply, %{state | pending: pending}}
   end
 
   @impl true
   def handle_info(:search, state) do
     if state.status == :closest do
-      GenServer.cast(via(state.id), {:update_state, :search})
+      GenServer.cast({:global, state.id}, {:update_state, :search})
       {:noreply, state}
     else
       {:noreply, state}
@@ -132,7 +117,7 @@ defmodule SafetyNet do
     new_state = %{state | coords: {new_x, new_y}}
 
     send_update_to_lighthouse(new_state)
-    time_to_move()
+    schedule(:chopchop, time_between_moves())
     {:noreply, new_state}
   end
 
@@ -142,18 +127,31 @@ defmodule SafetyNet do
   def handle_info(:sweep, state) do
     now = System.monotonic_time(:millisecond)
 
-    # IO.puts("#{state.id}: Doing a sweep...")
-
     overdue =
       state.pending
-      |> Enum.filter(fn {_peer, sent_at} ->
-        sent_at + timeout() <= now
+      |> Enum.filter(fn {_peer, {sent_at, origin_id}} ->
+        # For now we only check for pings that we originally requested.
+        origin_id == state.id && sent_at + timeout() <= now
       end)
       |> Enum.map(&elem(&1, 0))
 
-    if overdue != [], do: IO.puts("Acks overdue! Suspicious ships: #{inspect(overdue)}")
+    unless overdue == [], do: IO.puts("#{state.id}: Acks overdue! Suspicious ships: #{inspect(overdue)}")
 
-    schedule_sweep()
+    Enum.each(overdue, fn overdue_id ->
+      # Pick k random peers
+      targets = state.peers
+        |> Enum.reject(fn {id, _} -> id == overdue_id end)
+        |> Enum.map(fn {id, _} -> id end)
+        |> Enum.shuffle()
+        |> Enum.take(1) # Change number here to however many nodes we want to request pings from
+
+      # Send each peer a ping request
+      Enum.each(targets, fn peer_id ->
+        GenServer.cast({:global, peer_id}, {:ping_request, state.id, overdue_id, prepare_gossip(state)})
+      end)
+    end)
+
+    schedule(:sweep, time_between_sweeps())
     {:noreply, %{state | pending: Map.drop(state.pending, overdue)}}
   end
 
@@ -165,26 +163,56 @@ defmodule SafetyNet do
 NOTE: If the new status is :closest, it starts a timer to confirm it and turn it into :search
 """
 
+  # Handle ping: send ack back
   @impl true
-  def handle_cast({:ping, from_id, from_pid, gossip}, state) do
-    IO.puts("#{state.id}: received ping from #{from_id}, sending ack")
+  def handle_cast({:ping, from_id, gossip}, state) do
+    # IO.puts("#{state.id}: received ping from #{from_id}, sending ack")
+    state = merge_gossip(state, gossip)
 
-    # Merge data
-    new_state = merge_gossip(state, gossip)
+    # Just for testing... flip a coin, if it's heads you reply, if it's tails you don't
+    num = Enum.random(0..1)
+    if num == 0, do: GenServer.cast({:global, from_id}, {:ack, state.id, prepare_gossip(state)})
 
-    send(from_pid, {:ack, state.id, prepare_gossip(new_state)})
-    {:noreply, new_state}
+    {:noreply, state}
   end
 
+  # Handle ping request: send a ping to a node on behalf of another
+  @impl true
+  def handle_cast({:ping_request, from_id, to_id, gossip}, state) do
+    IO.puts("#{state.id}: received ping request from #{from_id}, Sending ping to #{to_id}")
+    state = merge_gossip(state, gossip)
+    pending = send_ping(to_id, from_id, state)
+    {:noreply, %{state | pending: pending}}
+  end
+
+  # Handle ack: remove from pending list and forward to requesting node if necessary
+  @impl true
+  def handle_cast({:ack, from_id, gossip}, state) do
+    state = merge_gossip(state, gossip)
+
+    case Map.pop(state.pending, from_id) do
+      {nil, _} ->
+        # No such pending message, ignore
+        {:noreply, state}
+      {{_, origin_id}, pending} when origin_id == state.id ->
+        # We requested this ack, nothing more to do
+        IO.puts("#{state.id}: received ack from #{from_id}, ok. Pending: #{inspect(pending)}")
+        {:noreply, %{state | pending: pending}}
+      {{_, origin_id}, pending} ->
+        # Forward the ack to the requesting node
+        IO.puts("#{state.id}: received ack from #{from_id}, forwarding to #{origin_id}. Pending: #{inspect(pending)}")
+        GenServer.cast({:global, origin_id}, {:ack, from_id, prepare_gossip(state)})
+        {:noreply, %{state | pending: pending}}
+    end
+  end
 
   @impl true
   def handle_cast({:closer?,{ missing, d, closest_ship}}, my_state) do
     cond do
       my_state.id == missing.id ->
       IO.puts("Hey, i'm alive!")
-      GenServer.cast(via(my_state.id), {:update_state, :alive})
+      GenServer.cast({:global, my_state.id}, {:update_state, :alive})
       {:noreply, my_state}
-
 
     my_state.status == :visited ->
       IO.puts("You've already asked me")
@@ -192,7 +220,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
 
     true ->
           # set stat to visited
-      GenServer.cast(via(my_state.id), {:update_state, :visited})
+      GenServer.cast({:global, my_state.id}, {:update_state, :visited})
 
       # calculate distance
       distance = calculate_distance(my_state.coords, missing.coords)
@@ -201,8 +229,8 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
       # compare distance
       if distance <= d do
         IO.puts("#{my_state.id}: I'm closer")
-        GenServer.cast(via(my_state.id), {:update_state, :closest})
-        GenServer.cast(via(closest_ship.id), {:update_state, :visited})
+        GenServer.cast({:global, my_state.id}, {:update_state, :closest})
+        GenServer.cast({:global, closest_ship.id}, {:update_state, :visited})
 
         ask_peers(my_state, missing, distance)
 
@@ -210,7 +238,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
         IO.puts("#{my_state.id}: I'm too far. I'll ask around")
 
         ask_peers(my_state, missing, d)
-        end
+      end
       {:noreply, my_state}
     end
   end
@@ -222,13 +250,22 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     IO.puts("#{new_state.id} ----> STATUS: #{new_state.status}")
     send_update_to_lighthouse(new_state)
     if new == :closest do
-      wait()
+      schedule(:search, 5000)
     end
     {:noreply, new_state}
   end
 
 
   # ------------------------------------------- HELPERS
+
+  # Sends a ping packet and files a pending ack
+  # Returns the new map of pending acks
+  defp send_ping(peer_id, origin_id, state) do
+    gossip = prepare_gossip(state)
+    GenServer.cast({:global, peer_id}, {:ping, state.id, gossip})
+    now = System.monotonic_time(:millisecond)
+    Map.put(state.pending, peer_id, {now, origin_id})
+  end
 
   defp prepare_gossip(state) do
     # TODO: pick some peer's updates to share as well as own status
@@ -239,7 +276,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     %{
       id: state.id,
       coords: state.coords,
-      status: :alive
+      status: state.status
     }
   end
 
@@ -253,18 +290,6 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     %{state | peers: new_peers}
   end
 
-  defp schedule_probe, do: Process.send_after(self(), :probe, 5000)
-
-  defp schedule_sweep, do: Process.send_after(self(), :sweep, 5000)
-
-  defp time_to_move, do: Process.send_after(self(), :chopchop, 5_000)
-
-  defp via(id), do: {:via, Registry, {SafetyNet, id}}
-
-  defp wait do
-    Process.send_after(self(), :search, 5_000)
-  end
-
   defp calculate_distance({ship_x, ship_y}, {target_x, target_y}) do
    :math.sqrt((ship_x - target_x)**2 + (ship_y - target_y)**2)
   end
@@ -272,12 +297,22 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
   defp ask_peers(my_state, missing_ship, my_distance) do
     Enum.each(my_state.peers, fn ship_id ->
 
-    GenServer.cast(via(ship_id), {:closer?, {missing_ship, my_distance, my_state}}) end)
+    GenServer.cast({:global, ship_id}, {:closer?, {missing_ship, my_distance, my_state}}) end)
   end
 
   defp send_update_to_lighthouse(state) do
     LighthouseServer.update_ship(own_membership(state))
   end
 
-  defp timeout(), do: 5000
+  # Schedule a job, e.g. a probe or updating the coordinates
+  defp schedule(message, timer), do: Process.send_after(self(), message, timer)
+
+  # Full SWIM protocol period
+  defp protocol_period, do: 5000
+  # How often we check our missing acks to see if they need to be handled
+  defp time_between_sweeps, do: 300
+  # How much time before we send out ping requests for a missing ack
+  defp timeout, do: 1000
+  # How often a ship's coordinates change
+  defp time_between_moves, do: 5000
 end
