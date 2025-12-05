@@ -135,7 +135,7 @@ defmodule SafetyNet do
       end)
       |> Enum.map(&elem(&1, 0))
 
-    unless overdue == [], do: IO.puts("#{state.id}: Acks overdue! Suspicious ships: #{inspect(overdue)}")
+    if overdue != [], do: IO.puts("#{state.id}: Acks overdue! Suspicious ships: #{inspect(overdue)}")
 
     Enum.each(overdue, fn overdue_id ->
       # Pick k random peers
@@ -151,8 +151,19 @@ defmodule SafetyNet do
       end)
     end)
 
+    # Mark all overdue nodes as suspect
+    updated_peers =
+      Enum.reduce(overdue, state.peers, fn overdue_id, acc_peers ->
+        Map.update!(acc_peers, overdue_id, fn peer ->
+          Map.put(peer, :status, :suspect)
+        end)
+      end)
+
+    # Remove them from pending
+    pending = Map.drop(state.pending, overdue)
+
     schedule(:sweep, time_between_sweeps())
-    {:noreply, %{state | pending: Map.drop(state.pending, overdue)}}
+    {:noreply, %{state | peers: updated_peers, pending: pending}}
   end
 
 #-------------------------------------------- HANDLE CASTS
