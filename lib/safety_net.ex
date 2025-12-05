@@ -6,7 +6,7 @@ defmodule SafetyNet do
   defstruct [:id, :peers, :coords, :status]
 
   def start_link(id, peers \\ [], coords \\ {0, 0}, status \\ :alive) do
-    GenServer.start_link(__MODULE__, {id, peers, coords, status}, name: via(id))
+    GenServer.start_link(__MODULE__, {id, peers, coords, status}, name: {:global, id})
   end
 
   @impl true
@@ -60,7 +60,7 @@ defmodule SafetyNet do
   def handle_info(:probe, state) do
     if state.peers != [] do
       peer = Enum.random(state.peers)
-      GenServer.cast(via(peer), {:ping, state.id, self()})
+      GenServer.cast({:global ,peer}, {:ping, state.id, self()})
     end
 
     schedule_probe()
@@ -77,7 +77,7 @@ defmodule SafetyNet do
   @impl true
   def handle_info(:search, state) do
     if state.status == :closest do
-      GenServer.cast(via(state.id), {:update_state, :search})
+      GenServer.cast({:global, state.id}, {:update_state, :search})
       {:noreply, state}
     else
       {:noreply, state}
@@ -107,7 +107,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
 
   @impl true
   def handle_cast({:ping, from_id, from_pid}, state) do
-    #IO.puts("#{state.id}: received ping from #{from_id}, sending ack")
+    IO.puts("#{state.id}: received ping from #{from_id}, sending ack")
     send(from_pid, {:ack, state.id})
     {:noreply, state}
   end
@@ -118,7 +118,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     cond do
       my_state.id == missing.id ->
       IO.puts("Hey, i'm alive!")
-      GenServer.cast(via(my_state.id), {:update_state, :alive})
+      GenServer.cast({:global,my_state.id}, {:update_state, :alive})
       {:noreply, my_state}
 
 
@@ -128,7 +128,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
 
     true ->
           # set stat to visited
-      GenServer.cast(via(my_state.id), {:update_state, :visited})
+      GenServer.cast({:global,my_state.id}, {:update_state, :visited})
 
       # calculate distance
       distance = calculate_distance(my_state.coords, missing.coords)
@@ -137,8 +137,8 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
       # compare distance
       if distance <= d do
         IO.puts("#{my_state.id}: I'm closer")
-        GenServer.cast(via(my_state.id), {:update_state, :closest})
-        GenServer.cast(via(closest_ship.id), {:update_state, :visited})
+        GenServer.cast({:global, my_state.id}, {:update_state, :closest})
+        GenServer.cast({:global,closest_ship.id}, {:update_state, :visited})
 
         ask_peers(my_state, missing, distance)
 
@@ -187,7 +187,7 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
   defp ask_peers(my_state, missing_ship, my_distance) do
     Enum.each(my_state.peers, fn ship_id ->
 
-    GenServer.cast(via(ship_id), {:closer?, {missing_ship, my_distance, my_state}}) end)
+    GenServer.cast({:global,ship_id}, {:closer?, {missing_ship, my_distance, my_state}}) end)
   end
 
 
