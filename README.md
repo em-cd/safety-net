@@ -1,6 +1,6 @@
 # SafetyNet
 
-## Running the code
+## Running the code on one terminaò
 
 First start the Mix project in iex:
 
@@ -30,6 +30,27 @@ GenServer.whereis({:global, 1}) # <- for ships
 
 GenServer.whereis(:lighthouse) # <- for the lighthouse
 #PID<0.199.0>
+```
+
+## Running on different nodes
+
+To create a node
+
+```bash
+iex --sname <node_name> --cookie secret  -S mix
+```
+To connect nodes
+```iex
+Node.connect(:"node_name@user")
+```
+To spawn a ship (id, peers, coordinates)
+```iex
+SafetyNet.start_link(:A, [:B, :C], {1, 1})
+```
+
+To spawn the Lighthouse (FRONTEND)
+```iex
+LighthouseServer.start_link
 ```
 
 ## Installation
