@@ -124,13 +124,14 @@ defmodule SafetyNet do
     |> SafetyNet.FailureDetection.handle_suspect()
     |> SafetyNet.FailureDetection.handle_failed()
 
-    # If there are failed nodes, start a search if I didn't already
+    # Check if there are failed nodes that I didn't search for already
     failed_peers =
       state.peers
       |> Enum.filter(fn {_id, peer} ->
         peer.status == :failed and peer.search_started == false
       end)
 
+    # Start a search if I didn't already
     state =
       Enum.reduce(failed_peers, state, fn {id, peer}, acc ->
         if peer.coords do
@@ -228,7 +229,7 @@ defmodule SafetyNet do
         my_state = SafetyNet.Search.search(my_state, missing_id)
         {:noreply, my_state}
 
-      # I'm already searching, do nothing else
+      # I'm already searching for someone, do nothing
       true ->
         {:noreply, my_state}
     end
