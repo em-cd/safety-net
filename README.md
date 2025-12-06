@@ -17,7 +17,7 @@ Demo.init()
 This should initialise a demo with several ships. To simulate a failure, run:
 
 ```elixir
-Demo.stop(:ship_id)
+Demo.stop(:A)
 ```
 
 This is the expected output from the Lighthouse:

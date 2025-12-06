@@ -8,9 +8,9 @@ defmodule SafetyNet.Ping do
   Sends a ping packet and files a pending ack
   Returns the new map of pending acks
   """
-  def send_ping(peer_id, origin_id, state) do
+  def send_ping(peer_id, origin_id, state, gossip \\ nil) do
     # IO.puts("#{state.id}: pinging #{peer_id}")
-    gossip = SafetyNet.Gossip.prepare_gossip(state)
+    gossip = gossip || SafetyNet.Gossip.prepare_gossip(state)
     GenServer.cast({:global, peer_id}, {:ping, state.id, gossip})
     now = System.monotonic_time(:millisecond)
     Map.put(state.pending, peer_id, %{sent_at: now, origin: origin_id, ping_requests_sent: false})

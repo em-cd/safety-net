@@ -4,10 +4,10 @@ defmodule SafetyNet do
   """
   use GenServer
 
-  defstruct [:id, :peers, :coords, :incarnation, :status, :pending]
+  defstruct [:id, :peers, :coords, :incarnation, :search_status, :pending]
 
-  def start_link(id, peers \\ [], coords \\ {0, 0}, status \\ :alive) do
-    GenServer.start_link(__MODULE__, {id, peers, coords, status}, name: {:global, id})
+  def start_link(id, peers \\ [], coords \\ {0, 0}) do
+    GenServer.start_link(__MODULE__, {id, peers, coords}, name: {:global, id})
   end
 
   # State should end up looking like:
@@ -15,7 +15,7 @@ defmodule SafetyNet do
   #   id: id,
   #   coords: coords,
   #   incarnation: num,
-  #   status: status # (for search functionality only)
+  #   search_status: nil or node_id,
   #   peers: %{
   #     :node_id => %{
   #         coords: last_known_coords,
@@ -29,11 +29,17 @@ defmodule SafetyNet do
   #   }
   # }
   @impl true
-  def init({id, peers, coords, status}) do
+  def init({id, peers, coords}) do
     peer_map =
       peers
       |> Enum.map(fn peer_id ->
-        {peer_id, %{status: :alive, coords: nil, incarnation: 0, suspect_since: nil}}
+        {peer_id, %{
+          status: :alive,
+          coords: nil,
+          incarnation: 0,
+          suspect_since: nil,
+          search_started: false
+          }}
       end)
       |> Enum.into(%{})
 
@@ -41,7 +47,7 @@ defmodule SafetyNet do
       id: id,
       coords: coords,
       incarnation: 0,
-      status: status,
+      search_status: nil,
       peers: peer_map,
       pending: %{}
     }
@@ -49,38 +55,16 @@ defmodule SafetyNet do
     LighthouseServer.add_ship(state)
     schedule(:probe, 0) # Start probing immediately
     schedule(:sweep, time_between_sweeps_ms())
-    # schedule(:chopchop, time_between_moves)
+    schedule(:chopchop, time_between_moves_ms())
     {:ok, state}
   end
-
-  @doc """
-  Once a ship is defined as MISSING, one ship calls this function to start looking for the closest ship.
-  This functions creates a cascade where ships compare their distances between peers and find the closest one.
-  It changes the participating ships statuses in:
-  :visited -> to mark the ones already compared
-  :closest -> temporary identifying the closest one
-  :search -> appears after a timer runs down and it identifies the final closest ship
-  :alive -> In case the missing ship is actually alive, it will set its status back to alive. No other action has been set.
-  """
-  def check_distance?(my_state, missing_ship) do
-    IO.puts("I, #{my_state.id}, think #{missing_ship.id} is missing")
-
-    # calculate my distace from missing ship
-    my_distance = calculate_distance(my_state.coords, missing_ship.coords)
-    IO.puts("I'm #{my_distance} clicks far away")
-    # set status: :closest
-    GenServer.cast({:global, my_state.id}, {:update_state, :closest})
-
-    ask_peers(my_state, missing_ship, my_distance)
-   end
 
 
   # ---------------------------------------- HANDLE INFOS
   @doc """
   :probe -> Pick a random peer and ping them
-  :ack -> Prints receiving an ACK
-  :search -> after wait() if the ship is still the closest to the missing one, sets its status to :search
   :chopchop -> makes the ships move . It's called by time_to_move()
+  :sweep -> Periodic check through pending messages and peers to detect overdue, suspect or failed nodes
   """
 
   # Periodic probe: pick a random peer and ping them
@@ -102,34 +86,32 @@ defmodule SafetyNet do
           SafetyNet.Ping.send_ping(peer_id, state.id, state)
       end
 
-    # Send a periodic update to the lighthouse
+    # Send an update to the lighthouse
     send_update_to_lighthouse(state)
 
     schedule(:probe, protocol_period_ms())
     {:noreply, %{state | pending: pending}}
   end
 
-  @impl true
-  def handle_info(:search, state) do
-    if state.status == :closest do
-      GenServer.cast({:global, state.id}, {:update_state, :search})
-      {:noreply, state}
-    else
-      {:noreply, state}
-    end
-  end
-
+  # Periodically update the ship's coordinates
   @impl true
   def handle_info(:chopchop, state) do
-    %SafetyNet{coords: {old_x, old_y}} = state
+    cond do
+      # If we're searching, stop moving randomly
+      state.search_status != nil ->
+        {:noreply, state}
+      # Otherwise, keep sailing ⛵
+      true ->
+        {old_x, old_y} = state.coords
 
-    new_x = old_x + Enum.random([0 , 1])
-    new_y = old_y + Enum.random([-1 ,0 , 1])
-    new_state = %{state | coords: {new_x, new_y}}
+        new_x = old_x + Enum.random([0 , 1])
+        new_y = old_y + Enum.random([-1 ,0 , 1])
+        new_state = %{state | coords: {new_x, new_y}}
 
-    send_update_to_lighthouse(new_state)
-    schedule(:chopchop, time_between_moves_ms())
-    {:noreply, new_state}
+        send_update_to_lighthouse(new_state)
+        schedule(:chopchop, time_between_moves_ms())
+        {:noreply, new_state}
+    end
   end
 
   # Periodically do a sweep for pending acks that have not been received.
@@ -142,6 +124,39 @@ defmodule SafetyNet do
     |> SafetyNet.FailureDetection.handle_suspect()
     |> SafetyNet.FailureDetection.handle_failed()
 
+    # If there are failed nodes, start a search if I didn't already
+    failed_peers =
+      state.peers
+      |> Enum.filter(fn {_id, peer} ->
+        peer.status == :failed and peer.search_started == false
+      end)
+
+    state =
+      Enum.reduce(failed_peers, state, fn {id, peer}, acc ->
+        if peer.coords do
+          SafetyNet.Search.search(acc, id)
+        else
+          acc
+        end
+      end)
+
+    # If I am searching for a node, and they turned out to be alive, reset my search_status
+    state =
+      case state.search_status do
+        nil ->
+          state
+        node ->
+          peer = state.peers[node]
+          if peer && peer.status != :failed do
+            %{state | search_status: nil}
+          else
+            state
+          end
+      end
+
+    # Update Lighthouse in case of changes
+    send_update_to_lighthouse(state)
+
     schedule(:sweep, time_between_sweeps_ms())
     {:noreply, state}
   end
@@ -151,9 +166,7 @@ defmodule SafetyNet do
 :ping -> Receive a PING, send ACK back
 :ping_request -> Forward a PING to another node
 :ack -> Receive an ACK, remove from pending and forward to another node if necessary
-:closer? -> called by check_distance/2
-:update_state -> to change status in a state. Please pass a new status to the function.
-NOTE: If the new status is :closest, it starts a timer to confirm it and turn it into :search
+:closer? -> called by search/2
 """
 
   # Handle ping: send ack back
@@ -198,74 +211,43 @@ NOTE: If the new status is :closest, it starts a timer to confirm it and turn it
     end
   end
 
+  # Handle closer?: refute the rumour if it's false, otherwise continue the search for the missing ship
   @impl true
-  def handle_cast({:closer?,{ missing, d, closest_ship}}, my_state) do
+  def handle_cast({:closer?, from_id, missing_id, gossip}, my_state) do
+    my_state = SafetyNet.Gossip.merge(my_state, gossip)
+
     cond do
-      my_state.id == missing.id ->
-      IO.puts("Hey, i'm alive!")
-      GenServer.cast({:global, my_state.id}, {:update_state, :alive})
-      {:noreply, my_state}
+      # The ship didn't really fail, let's update the ship who sent me this message with a ping
+      my_state.peers[missing_id].status != :failed ->
+        gossip = SafetyNet.Gossip.gossip_about(missing_id, my_state)
+        pending = SafetyNet.Ping.send_ping(from_id, my_state.id, my_state, gossip)
+        {:noreply, %{my_state | pending: pending}}
 
-    my_state.status == :visited ->
-      IO.puts("You've already asked me")
-      {:noreply, my_state}
+      # I'm not already searching, continue with the search
+      my_state.search_status == nil ->
+        my_state = SafetyNet.Search.search(my_state, missing_id)
+        {:noreply, my_state}
 
-    true ->
-          # set stat to visited
-      GenServer.cast({:global, my_state.id}, {:update_state, :visited})
-
-      # calculate distance
-      distance = calculate_distance(my_state.coords, missing.coords)
-      IO.puts("#{my_state.id}: I'm at #{distance} clicks")
-
-      # compare distance
-      if distance <= d do
-        IO.puts("#{my_state.id}: I'm closer")
-        GenServer.cast({:global, my_state.id}, {:update_state, :closest})
-        GenServer.cast({:global, closest_ship.id}, {:update_state, :visited})
-
-        ask_peers(my_state, missing, distance)
-
-      else
-        IO.puts("#{my_state.id}: I'm too far. I'll ask around")
-
-        ask_peers(my_state, missing, d)
-      end
-      {:noreply, my_state}
+      # I'm already searching, do nothing else
+      true ->
+        {:noreply, my_state}
     end
   end
-
-
-  @impl true
-  def handle_cast({:update_state, new}, state) do
-    new_state = %{state | status: new}
-    IO.puts("#{new_state.id} ----> STATUS: #{new_state.status}")
-    send_update_to_lighthouse(new_state)
-    if new == :closest do
-      schedule(:search, 5000)
-    end
-    {:noreply, new_state}
-  end
-
 
   # ------------------------------------------- HELPERS
 
-  defp calculate_distance({ship_x, ship_y}, {target_x, target_y}) do
-   :math.sqrt((ship_x - target_x)**2 + (ship_y - target_y)**2)
-  end
-
-  defp ask_peers(my_state, missing_ship, my_distance) do
-    Enum.each(my_state.peers, fn ship_id ->
-
-    GenServer.cast({:global, ship_id}, {:closer?, {missing_ship, my_distance, my_state}}) end)
-  end
-
   # Send my update to the Lighthouse, formatted nicely
   defp send_update_to_lighthouse(state) do
+    search_status =
+      case state.search_status do
+        nil -> :alive
+        search -> {:searching_for, search}
+      end
+
     LighthouseServer.update_ship(%{
       id: state.id,
       coords: state.coords,
-      status: state.status,
+      status: search_status,
       incarnation: state.incarnation
     })
   end

@@ -79,7 +79,7 @@ defmodule SafetyNet.FailureDetection do
   end
 
   @doc """
-  Handle failed nodes: mark as failed, remove from pending
+  Handle failed nodes: mark as failed, remove from pending, start search
   Returns the updated state
   """
   def handle_failed(state) do
@@ -91,6 +91,7 @@ defmodule SafetyNet.FailureDetection do
 
     peers =
       Enum.reduce(failed_ids, state.peers, fn failed_id, acc ->
+        # Update Lighthouse
         LighthouseServer.update_ship(%{
           id: failed_id,
           coords: acc[failed_id].coords,
@@ -109,7 +110,7 @@ defmodule SafetyNet.FailureDetection do
   end
 
   @doc """
-  Detects nodes with overdue acks that we are waiting for
+  Detects nodes with overdue acks
   Returns a list of their ids
   """
   def detect_overdue(state) do
@@ -144,7 +145,8 @@ defmodule SafetyNet.FailureDetection do
   end
 
   @doc"""
-  Detect failed nodes and returns a list of their ids
+  Detects suspect nodes that need to be marked as failed
+  Returns a list of their ids
   """
   def detect_failed(state) do
     now = System.monotonic_time(:millisecond)

@@ -26,7 +26,8 @@ defmodule SafetyNet.GossipTest do
         coords: {5,5},
         status: :alive,
         incarnation: 1,
-        suspect_since: nil
+        suspect_since: nil,
+        search_started: false
       }
     end
   end
@@ -69,8 +70,8 @@ defmodule SafetyNet.GossipTest do
     test "updates a peer when gossip has higher incarnation" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil},
-          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: System.monotonic_time(:millisecond)}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil, search_started: false},
+          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: System.monotonic_time(:millisecond), search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :alive, incarnation: 2},
@@ -82,21 +83,23 @@ defmodule SafetyNet.GossipTest do
         coords: {9,9},
         status: :alive,
         incarnation: 2,
-        suspect_since: nil
+        suspect_since: nil,
+        search_started: false
       }
       assert merged.peers[:C] == %{
         coords: {5,5},
         status: :alive,
         incarnation: 2,
-        suspect_since: nil
+        suspect_since: nil,
+        search_started: false
       }
     end
 
     test "ignores stale gossip with lower or equal incarnation" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil},
-          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: System.monotonic_time(:millisecond)}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil, search_started: false},
+          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: System.monotonic_time(:millisecond), search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :alive, incarnation: 2},
@@ -114,8 +117,8 @@ defmodule SafetyNet.GossipTest do
       suspect_since = System.monotonic_time(:millisecond)
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil},
-          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: suspect_since}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil, search_started: false},
+          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: suspect_since, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :suspect, incarnation: 2},
@@ -132,14 +135,15 @@ defmodule SafetyNet.GossipTest do
         coords: {5,5},
         status: :suspect,
         incarnation: 2,
-        suspect_since: suspect_since
+        suspect_since: suspect_since,
+        search_started: false
       }
     end
 
     test "updates the peer if I think they are alive and the incarnation is the same" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil},
+          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil, search_started: false},
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :suspect, incarnation: 1},
@@ -155,7 +159,7 @@ defmodule SafetyNet.GossipTest do
     test "ignores stale gossip with lower incarnation if I think they are alive" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :suspect, incarnation: 2},
@@ -169,7 +173,7 @@ defmodule SafetyNet.GossipTest do
       suspect_since = System.monotonic_time(:millisecond)
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :suspect, incarnation: 2, suspect_since: suspect_since}
+          :B => %{coords: {1,1}, status: :suspect, incarnation: 2, suspect_since: suspect_since, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :suspect, incarnation: 2},
@@ -185,8 +189,8 @@ defmodule SafetyNet.GossipTest do
       suspect_since = System.monotonic_time(:millisecond)
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil},
-          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: suspect_since}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil, search_started: false},
+          :C => %{coords: {0,0}, status: :suspect, incarnation: 1, suspect_since: suspect_since, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :failed, incarnation: 2},
@@ -203,27 +207,31 @@ defmodule SafetyNet.GossipTest do
         coords: {5,5},
         status: :failed,
         incarnation: 2,
-        suspect_since: suspect_since
+        suspect_since: suspect_since,
+        search_started: false
       }
     end
 
     test "updates the peer if I think they are alive and the incarnation is the same" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil},
+          :B => %{coords: {1,1}, status: :alive, incarnation: 1, suspect_since: nil, search_started: false},
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :failed, incarnation: 1},
       ]
       merged = SafetyNet.Gossip.merge(state, gossip)
 
-      assert merged.peers[:B] == %{coords: {9,9}, status: :failed, incarnation: 1, suspect_since: nil}
+      assert merged.peers[:B].coords == {9,9}
+      assert merged.peers[:B].status == :failed
+      assert merged.peers[:B].incarnation == 1
+      assert merged.peers[:B] != nil
     end
 
     test "ignores stale gossip with lower incarnation if I think they are alive" do
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil}
+          :B => %{coords: {1,1}, status: :alive, incarnation: 3, suspect_since: nil, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :failed, incarnation: 2},
@@ -237,7 +245,7 @@ defmodule SafetyNet.GossipTest do
       suspect_since = System.monotonic_time(:millisecond)
       state =
         state(%{
-          :B => %{coords: {1,1}, status: :failed, incarnation: 2, suspect_since: suspect_since}
+          :B => %{coords: {1,1}, status: :failed, incarnation: 2, suspect_since: suspect_since, search_started: false}
         })
       gossip = [
         %{id: :B, coords: {9,9}, status: :failed, incarnation: 2},

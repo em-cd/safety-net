@@ -43,7 +43,8 @@ defmodule SafetyNet.Gossip do
                 coords: coords,
                 status: status,
                 incarnation: inc,
-                suspect_since: if(status == :suspect, do: System.monotonic_time(:millisecond), else: nil)
+                suspect_since: if(status == :suspect, do: System.monotonic_time(:millisecond), else: nil),
+                search_started: false
               })
             %{incarnation: local_inc, status: local_status} = local_peer ->
               cond do
@@ -61,25 +62,22 @@ defmodule SafetyNet.Gossip do
                         nil
                       else
                         local_peer.suspect_since || System.monotonic_time(:millisecond)
-                      end
+                      end,
+                    search_started: false
                   })
                 # Override local :alive status if the gossip says :suspect or :failed
                 inc == local_inc and status != :alive and local_status == :alive ->
                   put_in(acc_state.peers[id], %{
-                    coords: coords,
+                    coords: coords || local_peer.coords, # keep local coords if incoming coords are nil
                     status: status,
                     incarnation: inc,
-                    suspect_since:
-                      if status == :suspect do
-                        local_peer.suspect_since || System.monotonic_time(:millisecond)
-                      else
-                        local_peer.suspect_since || nil
-                      end
+                    suspect_since: local_peer.suspect_since || System.monotonic_time(:millisecond),
+                    search_started: false
                   })
                 # Same incarnation, node is alive: update metadata
                 inc == local_inc and status == :alive and local_status == :alive ->
                   put_in(acc_state.peers[id], %{
-                    local_peer | coords: coords
+                    local_peer | coords: coords || local_peer.coords # keep local coords if incoming coords are nil
                   })
                 # Stale gossip, ignore
                 true ->
@@ -90,12 +88,27 @@ defmodule SafetyNet.Gossip do
     end)
   end
 
+  @doc"""
+  Gossip about a specific node
+  Also send own gossip because why not
+  """
+  def gossip_about(peer_id, state) do
+    peer = {peer_id, state.peers[peer_id]}
+    [own_membership(state), peer_membership(peer)]
+  end
+
   # Format my state to send as gossip
   defp own_membership(state) do
+    search_status =
+      case state.search_status do
+        nil -> :alive
+        search -> {:searching_for, search}
+      end
+
     %{
       id: state.id,
       coords: state.coords,
-      status: state.status,
+      status: search_status,
       incarnation: state.incarnation
     }
   end
