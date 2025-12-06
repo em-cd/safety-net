@@ -14,7 +14,11 @@ You can now initialise a demo with:
 Demo.init()
 ```
 
-You should see some pings and acks going back and forth between the processes.
+This should initialise a demo with several ships. To simulate a failure, run:
+
+```elixir
+Demo.stop(:ship_id)
+```
 
 This is the expected output from the Lighthouse:
 
