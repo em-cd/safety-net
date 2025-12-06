@@ -12,10 +12,13 @@ defmodule Demo do
       {:error, {:already_started, _pid}} -> :ok
     end
 
-    Enum.each(ships, fn node ->
-      case Registry.lookup(SafetyNet, node) do
-        [{pid, _}] -> GenServer.stop(pid)
-        [] -> :ok
+    Enum.each(ships, fn ship_id ->
+      case :global.whereis_name(ship_id) do
+        :undefined ->
+          :ok
+
+        pid when is_pid(pid) ->
+          GenServer.stop(pid, :normal)
       end
     end)
 
@@ -29,9 +32,19 @@ defmodule Demo do
     "Network initialized! 5 ships with different initial data."
   end
 
+  def stop(ship_id) do
+    case :global.whereis_name(ship_id) do
+      :undefined ->
+        {:error, :not_found}
+
+      pid ->
+        GenServer.stop(pid)
+        {:ok, :stopped}
+    end
+  end
+
   def e_missing do
     SafetyNet.check_distance?(%{id: :D, peers: [:B, :E], coords: {3, 7}, status: :alive},%{id: :E, peers: [:C, :D], coords: {2, 5}, status: :missing})
-
   end
 
 end

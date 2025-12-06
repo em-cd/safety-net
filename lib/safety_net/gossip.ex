@@ -25,13 +25,10 @@ defmodule SafetyNet.Gossip do
       cond do
         # This is a rumour about me!
         id == acc_state.id ->
-          if status == :suspect && inc == state.incarnation do
+          if status != :alive && inc == acc_state.incarnation do
             # Uh oh, someone suspects me. Update my incarnation number so they know I'm alive
-            new_state =
-              acc_state
-              |> Map.update!(:incarnation, &(&1 + 1))
             # IO.puts("#{acc_state.id}: Received a rumor about myself, bumping incarnation.")
-            new_state
+            %{acc_state | incarnation: acc_state.incarnation + 1}
           else
             # The rumour says I'm alive or the incarnation number is old, either way I can ignore it
             acc_state
@@ -39,25 +36,54 @@ defmodule SafetyNet.Gossip do
 
         # This is a rumour about someone else
         true ->
-          case state.peers[id] do
+          case acc_state.peers[id] do
             nil ->
               # It's a new node I didn't know about
               put_in(acc_state.peers[id], %{
                 coords: coords,
                 status: status,
-                incarnation: inc
+                incarnation: inc,
+                suspect_since: if(status == :suspect, do: System.monotonic_time(:millisecond), else: nil)
               })
-            %{incarnation: local_inc} = _local_peer ->
-              if inc > local_inc do
-                # This is news to me, I'll update my membership list
-                put_in(acc_state.peers[id], %{
-                  coords: coords,
-                  status: status,
-                  incarnation: inc
-                })
-              else
+            %{incarnation: local_inc, status: local_status} = local_peer ->
+              cond do
+                # Never downgrade :failed to :suspect or :alive unless incarnation increases
+                inc <= local_inc and local_status == :failed and status != :failed ->
+                  acc_state
+                # Higher incarnation number: this is news to me, I'll update my membership list
+                inc > local_inc ->
+                  put_in(acc_state.peers[id], %{
+                    coords: coords,
+                    status: status,
+                    incarnation: inc,
+                    suspect_since:
+                      if status == :alive do
+                        nil
+                      else
+                        local_peer.suspect_since || System.monotonic_time(:millisecond)
+                      end
+                  })
+                # Override local :alive status if the gossip says :suspect or :failed
+                inc == local_inc and status != :alive and local_status == :alive ->
+                  put_in(acc_state.peers[id], %{
+                    coords: coords,
+                    status: status,
+                    incarnation: inc,
+                    suspect_since:
+                      if status == :suspect do
+                        local_peer.suspect_since || System.monotonic_time(:millisecond)
+                      else
+                        local_peer.suspect_since || nil
+                      end
+                  })
+                # Same incarnation, node is alive: update metadata
+                inc == local_inc and status == :alive and local_status == :alive ->
+                  put_in(acc_state.peers[id], %{
+                    local_peer | coords: coords
+                  })
                 # Stale gossip, ignore
-                acc_state
+                true ->
+                  acc_state
               end
           end
       end
