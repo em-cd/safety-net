@@ -1,17 +1,14 @@
 defmodule Demo do
 
+  @doc"""
+  Start up a few ships to see SafetyNet in action.
+  """
   def init do
     LighthouseServer.start_link()
 
-    Process.sleep(100)
-
     ships = [:A, :B, :C, :D, :E]
 
-    case Registry.start_link(keys: :unique, name: SafetyNet) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> :ok
-    end
-
+    # Stop any ships that were already running
     Enum.each(ships, fn ship_id ->
       case :global.whereis_name(ship_id) do
         :undefined ->
@@ -19,19 +16,33 @@ defmodule Demo do
 
         pid when is_pid(pid) ->
           GenServer.stop(pid, :normal)
+          :global.unregister_name(ship_id)
       end
     end)
 
+    Process.sleep(100)
+
     # Start all nodes with peer connections
-    {:ok, _} = SafetyNet.start_link(:A, [:B, :C], {1, 1})
-    {:ok, _} = SafetyNet.start_link(:B, [:A, :C, :D], {0, 4})
-    {:ok, _} = SafetyNet.start_link(:C, [:A, :B, :E], {8, 3})
-    {:ok, _} = SafetyNet.start_link(:D, [:B, :E], {3, 7})
-    {:ok, _} = SafetyNet.start_link(:E, [:C, :D], {2, 5})
+    add_ship(:A, [:B, :C], {1, 1})
+    add_ship(:B, [:A, :C, :D], {0, 4})
+    add_ship(:C, [:A, :B, :E], {8, 3})
+    add_ship(:D, [:B, :E], {3, 7})
+    add_ship(:E, [:C, :D], {2, 5})
 
     "Network initialized! 5 ships with different initial data."
   end
 
+
+  @doc"""
+  Adds a ship
+  """
+  def add_ship(ship_id, peers, coords \\ {0,0}) do
+    {:ok, _} = SafetyNet.start_link(ship_id, peers, coords)
+  end
+
+  @doc"""
+  Stop a ship. Useful for seeing the failure detection module in action
+  """
   def stop(ship_id) do
     case :global.whereis_name(ship_id) do
       :undefined ->

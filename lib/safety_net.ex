@@ -56,6 +56,7 @@ defmodule SafetyNet do
     schedule(:probe, 0) # Start probing immediately
     schedule(:sweep, time_between_sweeps_ms())
     schedule(:chopchop, time_between_moves_ms())
+
     {:ok, state}
   end
 
@@ -77,13 +78,17 @@ defmodule SafetyNet do
         [] ->
           state.pending
         peers ->
-          {peer_id, _peer_data} =
-            peers
-              |> Enum.filter(fn {_, peer} ->
-                peer.status != :failed
-              end)
-              |> Enum.random()
-          SafetyNet.Ping.send_ping(peer_id, state.id, state)
+          live_peers = Enum.filter(peers, fn {_, peer} -> peer.status != :failed end)
+
+          case live_peers do
+            [] ->
+              IO.puts("#{state.id}: no live peers to ping :(")
+              state.pending
+
+            _ ->
+              {peer_id, _peer_data} = Enum.random(live_peers)
+              SafetyNet.Ping.send_ping(peer_id, state.id, state)
+          end
       end
 
     # Send an update to the lighthouse
