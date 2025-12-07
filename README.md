@@ -20,6 +20,20 @@ This should initialise a demo with several ships. To simulate a failure, run:
 Demo.stop(:A)
 ```
 
+You can also add a new ship with:
+
+```elixir
+Demo.add_ship(:ship_id, [:ship_2, :ship_3])
+```
+
+By default the new ship's coordinates will be {0,0} but you can also specify them if you like by passing them as
+a third argument:
+
+```elixir
+Demo.add_ship(:ship_id, [:ship_2, :ship_3], {10,10})
+```
+
+
 This is the expected output from the Lighthouse:
 
 ```
@@ -44,16 +58,20 @@ To create a node
 iex --sname <node_name> --cookie secret  -S mix
 ```
 To connect nodes
-```iex
+
+```elixir
 Node.connect(:"node_name@user")
 ```
-To spawn a ship (id, peers, coordinates)
-```iex
-SafetyNet.start_link(:A, [:B, :C], {1, 1})
+
+To run a distributed demo, run `Demo.init()` in one terminal and in the other add some ships:
+
+```elixir
+Demo.add_ship(:F, [:B, :C], {1, 1})
+Demo.add_ship(:G, [:A])
 ```
 
 To spawn the Lighthouse (FRONTEND)
-```iex
+```elixir
 LighthouseServer.start_link
 ```
 
