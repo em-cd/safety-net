@@ -1,3 +1,4 @@
 %{
   "math": {:hex, :math, "0.6.0", "69325af99e600123f6d994833502f6d063a2fa8f2786a3c0461fe6c6123a5166", [:mix], [], "hexpm", "2c73a64d64f719ee1f2821d382f3ed63e8e9564e5176d1c8aa777aac49b41bf7"},
+  "phoenix_pubsub": {:hex, :phoenix_pubsub, "2.2.0", "ff3a5616e1bed6804de7773b92cbccfc0b0f473faf1f63d7daf1206c7aeaaa6f", [:mix], [], "hexpm", "adc313a5bf7136039f63cfd9668fde73bba0765e0614cba80c06ac9460ff3e96"},
 }
