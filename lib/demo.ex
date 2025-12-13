@@ -24,10 +24,10 @@ defmodule Demo do
 
     # Start all nodes with peer connections
     add_ship(:A, [:B, :C], {1, 1})
-    add_ship(:B, [:A, :C, :D], {0, 4})
-    add_ship(:C, [:A, :B, :E], {8, 3})
-    add_ship(:D, [:B, :E], {3, 7})
-    add_ship(:E, [:C, :D], {2, 5})
+    add_ship(:B, [:A, :C, :D], {10, 0})
+    add_ship(:C, [:A, :B, :E], {18, 3})
+    add_ship(:D, [:B, :E], {14, 30})
+    add_ship(:E, [:C, :D], {33, 33})
 
     "Network initialized! 5 ships with different initial data."
   end

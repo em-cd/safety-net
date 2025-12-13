@@ -10,7 +10,6 @@ defmodule SafetyNet do
     GenServer.start_link(__MODULE__, {id, peers, coords}, name: {:global, id})
   end
 
-  # State should end up looking like:
   # state = %{
   #   id: id,
   #   coords: coords,
@@ -52,21 +51,17 @@ defmodule SafetyNet do
       pending: %{}
     }
 
-    LighthouseServer.add_ship(state)
+    SafetyNet.PubSub.broadcast(:ship_update, {id, coords, :alive, 0})
+
     schedule(:probe, 0) # Start probing immediately
     schedule(:sweep, time_between_sweeps_ms())
-    schedule(:chopchop, time_between_moves_ms())
+    schedule(:move, time_between_moves_ms())
 
     {:ok, state}
   end
 
 
   # ---------------------------------------- HANDLE INFOS
-  @doc """
-  :probe -> Pick a random peer and ping them
-  :chopchop -> makes the ships move . It's called by time_to_move()
-  :sweep -> Periodic check through pending messages and peers to detect overdue, suspect or failed nodes
-  """
 
   # Periodic probe: pick a random peer and ping them
   @impl true
@@ -100,21 +95,17 @@ defmodule SafetyNet do
 
   # Periodically update the ship's coordinates
   @impl true
-  def handle_info(:chopchop, state) do
+  def handle_info(:move, state) do
     cond do
       # If we're searching, stop moving randomly
       state.search_status != nil ->
+        schedule(:move, time_between_moves_ms())
         {:noreply, state}
       # Otherwise, keep sailing ⛵
       true ->
-        {old_x, old_y} = state.coords
-
-        new_x = old_x + Enum.random([0 , 1])
-        new_y = old_y + Enum.random([-1 ,0 , 1])
-        new_state = %{state | coords: {new_x, new_y}}
-
+        new_state = %{state | coords: SafetyNet.ShipMovement.move(state.coords)}
         send_update_to_lighthouse(new_state)
-        schedule(:chopchop, time_between_moves_ms())
+        schedule(:move, time_between_moves_ms())
         {:noreply, new_state}
     end
   end
@@ -168,12 +159,6 @@ defmodule SafetyNet do
   end
 
 #-------------------------------------------- HANDLE CASTS
-@doc """
-:ping -> Receive a PING, send ACK back
-:ping_request -> Forward a PING to another node
-:ack -> Receive an ACK, remove from pending and forward to another node if necessary
-:closer? -> called by search/2
-"""
 
   # Handle ping: send ack back
   @impl true
@@ -261,5 +246,5 @@ defmodule SafetyNet do
   # How often we check pending acks and suspected nodes
   defp time_between_sweeps_ms, do: 300
   # How often a ship's coordinates change
-  defp time_between_moves_ms, do: 5000
+  defp time_between_moves_ms, do: 2000
 end

@@ -25,7 +25,7 @@ defmodule SafetyNet.Gossip do
       cond do
         # This is a rumour about me!
         id == acc_state.id ->
-          if status != :alive && inc == acc_state.incarnation do
+          if status in [:suspect, :failed] && inc == acc_state.incarnation do
             # Uh oh, someone suspects me. Update my incarnation number so they know I'm alive
             # IO.puts("#{acc_state.id}: Received a rumor about myself, bumping incarnation.")
             %{acc_state | incarnation: acc_state.incarnation + 1}

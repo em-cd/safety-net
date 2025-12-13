@@ -26,10 +26,12 @@ defmodule SafetyNet.Ping do
 
   @doc """
   Send an ack, including who it's from so the recipient knows whether to forward it or not
+  Include gossip about the node who pinged us so they can know what's being said about them
   """
   def send_ack(to_id, from_id, state) do
     # IO.puts("#{state.id}: sending an ack to #{to_id} from #{from_id}")
-    GenServer.cast({:global, to_id}, {:ack, from_id, SafetyNet.Gossip.prepare_gossip(state)})
+    gossip = SafetyNet.Gossip.gossip_about(to_id, state)
+    GenServer.cast({:global, to_id}, {:ack, from_id, gossip})
   end
 
 end

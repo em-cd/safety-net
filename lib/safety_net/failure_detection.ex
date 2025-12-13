@@ -155,5 +155,5 @@ defmodule SafetyNet.FailureDetection do
   defp suspect_timeout_ms, do: 4000
 
   # How much time before we declare a suspect ship as failed
-  defp failed_timeout_ms, do: 8000
+  defp failed_timeout_ms, do: 10000
 end
