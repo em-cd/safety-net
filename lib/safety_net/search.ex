@@ -33,11 +33,13 @@ defmodule SafetyNet.Search do
     end)
 
     # Logging
-    if closest_id != my_state.id do
-      IO.puts("#{my_state.id}: closest ship I know about is #{closest_id}, distance: #{closest_distance}")
+    msg = if closest_id != my_state.id do
+      "#{my_state.id}: closest peer to #{missing_ship_id} is #{closest_id}, distance: #{closest_distance}"
     else
-      IO.puts("#{my_state.id}: I am the closest ship I know about")
+      "#{my_state.id}: I am the closest ship I know about to #{missing_ship_id}"
     end
+    IO.puts(msg)
+    SafetyNet.PubSub.broadcast(:message, msg)
 
     # If someone else is closer, contact them
     if closest_id != my_state.id, do: ask_peer(closest_id, my_state, missing_ship_id)
@@ -63,7 +65,7 @@ defmodule SafetyNet.Search do
 
   # Calculates the distance between two ships
   def calculate_distance({ship_x, ship_y}, {target_x, target_y}) do
-    :math.sqrt((ship_x - target_x)**2 + (ship_y - target_y)**2)
+    Float.round(:math.sqrt((ship_x - target_x)**2 + (ship_y - target_y)**2), 2)
   end
 
 end

@@ -244,18 +244,13 @@ defmodule SafetyNet do
 
   # Send my update to the Lighthouse, formatted nicely
   defp send_update_to_lighthouse(state) do
-    search_status =
+    status =
       case state.search_status do
         nil -> :alive
         search -> {:searching_for, search}
       end
 
-    LighthouseServer.update_ship(%{
-      id: state.id,
-      coords: state.coords,
-      status: search_status,
-      incarnation: state.incarnation
-    })
+    SafetyNet.PubSub.broadcast(:ship_update, {state.id, state.coords, status, state.incarnation})
   end
 
   # Schedule a job, e.g. a probe or updating the coordinates

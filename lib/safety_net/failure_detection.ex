@@ -10,15 +10,9 @@ defmodule SafetyNet.FailureDetection do
   def handle_overdue(state) do
     overdue_ids = detect_overdue(state)
     if overdue_ids != [] do
-      IO.puts("#{state.id}: Acks overdue! Requesting pings for #{inspect(overdue_ids)}")
-
-      # Long version for debugging...
-      # IO.puts("#{state.id}: Acks overdue!
-      # Requesting pings for #{inspect(overdue_ids)}
-      # suspect: #{inspect(detect_suspect(state))},
-      # failed: #{inspect(detect_failed(state))}.
-      # \n Peers: #{inspect(state.peers, pretty: true)}
-      # \n Pending: #{inspect(state.pending, pretty: true)}")
+      msg = "#{state.id}: Acks overdue! Requesting pings for #{inspect(overdue_ids)}"
+      IO.puts(msg)
+      SafetyNet.broadcast(:message, msg)
     end
 
     Enum.each(overdue_ids, fn overdue_id ->
@@ -54,17 +48,9 @@ defmodule SafetyNet.FailureDetection do
 
     suspect_ids = detect_suspect(state)
     if suspect_ids != [] do
-      IO.puts("#{state.id}: Suspect ships: #{inspect(suspect_ids)}")
-
-      # Long version for debugging...
-      # IO.puts("#{state.id}: Acks overdue!
-      # Suspect ships: #{inspect(suspect_ids)},
-      # overdue: #{inspect(detect_overdue(state))},
-      # failed: #{inspect(detect_failed(state))}.
-      # \n Peers: #{inspect(state.peers, pretty: true)}
-      # \n Pending: #{inspect(state.pending, pretty: true)}
-      # \n #{now}
-      # ")
+      msg = "#{state.id}: Suspect ships: #{inspect(suspect_ids)}"
+      IO.puts(msg)
+      SafetyNet.PubSub.broadcast(:message, msg)
     end
 
     updated_peers =
@@ -86,17 +72,19 @@ defmodule SafetyNet.FailureDetection do
     failed_ids = detect_failed(state)
 
     if failed_ids != [] do
-      IO.puts("#{state.id}: SOS, #{inspect(failed_ids)} failed!")
+      msg = "#{state.id}: SOS, #{inspect(failed_ids)} failed!"
+      IO.puts(msg)
+      SafetyNet.PubSub.broadcast(:message, msg)
     end
 
     peers =
       Enum.reduce(failed_ids, state.peers, fn failed_id, acc ->
-        # Update Lighthouse
-        LighthouseServer.update_ship(%{
-          id: failed_id,
-          coords: acc[failed_id].coords,
-          status: :failed,
-          incarnation: acc[failed_id].incarnation
+        # Update Lighthouse about the failed ship
+        SafetyNet.PubSub.broadcast(:ship_update, {
+          failed_id,
+          acc[failed_id].coords,
+          :failed,
+          acc[failed_id].incarnation
         })
         # Return map
         Map.update!(acc, failed_id, fn p ->
