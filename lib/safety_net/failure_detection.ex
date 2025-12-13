@@ -12,7 +12,7 @@ defmodule SafetyNet.FailureDetection do
     if overdue_ids != [] do
       msg = "#{state.id}: Acks overdue! Requesting pings for #{inspect(overdue_ids)}"
       IO.puts(msg)
-      SafetyNet.broadcast(:message, msg)
+      SafetyNet.PubSub.broadcast(:message, msg)
     end
 
     Enum.each(overdue_ids, fn overdue_id ->
