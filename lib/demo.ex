@@ -4,8 +4,6 @@ defmodule Demo do
   Start up a few ships to see SafetyNet in action.
   """
   def init do
-    LighthouseServer.start_link()
-
     ships = [:A, :B, :C, :D, :E]
 
     # Stop any ships that were already running

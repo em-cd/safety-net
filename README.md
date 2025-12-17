@@ -1,6 +1,6 @@
 # SafetyNet
 
-## Running the code on one terminaò
+## Running the code on one terminal
 
 First start the Mix project in iex:
 
@@ -33,31 +33,42 @@ a third argument:
 Demo.add_ship(:ship_id, [:ship_2, :ship_3], {10,10})
 ```
 
+## Connecting to the Lighthouse frontend
 
-This is the expected output from the Lighthouse:
+The Lighthouse is a Phoenix app that uses PubSub to receive broadcasts about the ships and display them.
 
+Start the Lighthouse with a cookie and a node name, e.g.:
+
+```bash
+iex --name lighthouse@localhost --cookie secret -S mix phx.server
 ```
-[%Ship{id: 3, coords: {3, 3}, status: :PIRATES}, %Ship{id: 2, coords: {2, 2}, status: :alive}, %Ship{id: 1, coords: {1, 1}, status: :alive}]
+
+Now when you start the SafetyNet app, use the same cookie:
+
+```bash
+iex --name <node_name> --cookie secret -S mix
 ```
 
-You can verify the PIDs with:
+Then connect SafetyNet to the Lighthouse by running:
 
-```iex
-GenServer.whereis({:global, 1}) # <- for ships
-#PID<0.200.0>
-
-GenServer.whereis(:lighthouse) # <- for the lighthouse
-#PID<0.199.0>
+```elixir
+Node.connect(:lighthouse@localhost)
 ```
+
+Now the nodes should be connected. You can start the demo and the ships will broadcast updates to the Lighthouse automatically.
+
 
 ## Running on different nodes
 
-To create a node
+To create a node:
 
 ```bash
-iex --sname <node_name> --cookie secret  -S mix
+iex --sname <node_name> --cookie secret -S mix
 ```
-To connect nodes
+
+Now at this point if you have the Lighthouse running, you can simply connect each extra node running SafetyNet to the Lighthouse and they will join the network and be able to communicate with ships on other nodes.
+
+If you aren't running the Lighthouse, simply connect nodes to each other:
 
 ```elixir
 Node.connect(:"node_name@user")
@@ -70,10 +81,6 @@ Demo.add_ship(:F, [:B, :C], {1, 1})
 Demo.add_ship(:G, [:A])
 ```
 
-To spawn the Lighthouse (FRONTEND)
-```elixir
-LighthouseServer.start_link
-```
 
 ## Installation
 

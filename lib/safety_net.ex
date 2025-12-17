@@ -66,7 +66,7 @@ defmodule SafetyNet do
   # Periodic probe: pick a random peer and ping them
   @impl true
   def handle_info(:probe, state) do
-    # IO.puts("#{state.id}: my peers are #{inspect(state.peers, pretty: true)}")
+    IO.puts("#{state.id}: status: #{inspect(get_status(state))}, coords: #{inspect(state.coords)}, incarnation: #{state.incarnation}. My peers are: #{inspect(state.peers, pretty: true)}")
 
     pending =
       case state.peers do
@@ -227,15 +227,18 @@ defmodule SafetyNet do
 
   # ------------------------------------------- HELPERS
 
-  # Send my update to the Lighthouse, formatted nicely
+  # Send my update to the Lighthouse
   defp send_update_to_lighthouse(state) do
-    status =
-      case state.search_status do
-        nil -> :alive
-        search -> {:searching_for, search}
-      end
-
+    status = get_status(state)
     SafetyNet.PubSub.broadcast(:ship_update, {state.id, state.coords, status, state.incarnation})
+  end
+
+  # Return my status: alive or searching for missing ship
+  defp get_status(state) do
+    case state.search_status do
+      nil -> :alive
+      search -> {:searching_for, search}
+    end
   end
 
   # Schedule a job, e.g. a probe or updating the coordinates

@@ -12,12 +12,15 @@ defmodule SafetyNet.Search do
   def search(my_state, missing_ship_id) do
     missing_ship_coords = my_state.peers[missing_ship_id].coords
 
-    # calculate my distace from missing ship
+    # Calculate my distace from missing ship
     my_distance = calculate_distance(my_state.coords, missing_ship_coords)
     IO.puts("#{my_state.id}: I'm #{my_distance} clicks far away from #{missing_ship_id}")
 
+    # Find who is closest out of me and my peers
     {closest_id, closest_distance} = Enum.reduce(my_state.peers, {my_state.id, my_distance}, fn
       {id, %{coords: coords}}, {acc_id, acc_dist}
+
+      # Skip the missing ship and peers without coords
       when id != missing_ship_id and coords != nil ->
         dist = calculate_distance(coords, missing_ship_coords)
 
@@ -27,7 +30,6 @@ defmodule SafetyNet.Search do
           {acc_id, acc_dist}
         end
 
-      # Skip the missing ship and peers without coords
       _, acc ->
         acc
     end)
@@ -53,9 +55,9 @@ defmodule SafetyNet.Search do
       )
 
     # Set my status to searching if I am closest at this point
-    my_search_status = if closest_id == my_state.id, do: missing_ship_id, else: my_state.search_status
+    search_status = if closest_id == my_state.id, do: missing_ship_id, else: my_state.search_status
 
-    %{my_state | peers: peers, search_status: my_search_status}
+    %{my_state | peers: peers, search_status: search_status}
   end
 
   # Sends a :closer? message to a peer
