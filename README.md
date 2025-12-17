@@ -2,9 +2,10 @@
 
 ## Running the code on one terminal
 
-First start the Mix project in iex:
+First install dependencies and start the Mix project in iex:
 
 ```bash
+mix deps.get
 iex -S mix
 ```
 
@@ -81,6 +82,13 @@ Demo.add_ship(:F, [:B, :C], {1, 1})
 Demo.add_ship(:G, [:A])
 ```
 
+## Running tests
+
+There are a few tests, you can run them with the following command:
+
+```bash
+mix test
+```
 
 ## Installation
 
