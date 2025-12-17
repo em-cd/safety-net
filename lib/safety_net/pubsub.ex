@@ -4,12 +4,13 @@ defmodule SafetyNet.PubSub do
   Provides helpers to broadcast updates and messages to the Lighthouse
   """
 
-  def broadcast(:ship_update, {id, coords, status, incarnation}) do
+  def broadcast(:ship_update, {id, coords, status, incarnation, num_peers}) do
     Phoenix.PubSub.broadcast(Lighthouse.PubSub, "fleet:updates", {:ship_update, %{
       id: id,
       coords: coords,
       status: status,
-      incarnation: incarnation
+      incarnation: incarnation,
+      peers: num_peers
     }})
   end
 

@@ -51,7 +51,7 @@ defmodule SafetyNet do
       pending: %{}
     }
 
-    SafetyNet.PubSub.broadcast(:ship_update, {id, coords, :alive, 0})
+    SafetyNet.PubSub.broadcast(:ship_update, {id, coords, :alive, 0, Enum.count(peers)})
 
     schedule(:probe, 0) # Start probing immediately
     schedule(:sweep, time_between_sweeps_ms())
@@ -66,7 +66,7 @@ defmodule SafetyNet do
   # Periodic probe: pick a random peer and ping them
   @impl true
   def handle_info(:probe, state) do
-    IO.puts("#{state.id}: status: #{inspect(get_status(state))}, coords: #{inspect(state.coords)}, incarnation: #{state.incarnation}. My peers are: #{inspect(state.peers, pretty: true)}")
+    # IO.puts("#{state.id}: status: #{inspect(get_status(state))}, coords: #{inspect(state.coords)}, incarnation: #{state.incarnation}. My peers are: #{inspect(state.peers, pretty: true)}")
 
     pending =
       case state.peers do
@@ -215,7 +215,7 @@ defmodule SafetyNet do
         {:noreply, %{my_state | pending: pending}}
 
       # I'm not already searching, continue with the search
-      my_state.search_status == nil ->
+      my_state.search_status == nil and my_state.peers[missing_id].coords ->
         my_state = SafetyNet.Search.search(my_state, missing_id)
         {:noreply, my_state}
 
@@ -230,7 +230,7 @@ defmodule SafetyNet do
   # Send my update to the Lighthouse
   defp send_update_to_lighthouse(state) do
     status = get_status(state)
-    SafetyNet.PubSub.broadcast(:ship_update, {state.id, state.coords, status, state.incarnation})
+    SafetyNet.PubSub.broadcast(:ship_update, {state.id, state.coords, status, state.incarnation, Enum.count(state.peers)})
   end
 
   # Return my status: alive or searching for missing ship

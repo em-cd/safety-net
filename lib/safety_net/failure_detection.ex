@@ -84,7 +84,8 @@ defmodule SafetyNet.FailureDetection do
           failed_id,
           acc[failed_id].coords,
           :failed,
-          acc[failed_id].incarnation
+          acc[failed_id].incarnation,
+          nil
         })
         # Return map
         Map.update!(acc, failed_id, fn p ->

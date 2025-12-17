@@ -27,7 +27,7 @@ defmodule Demo do
     add_ship(:D, [:B, :E], {14, 30})
     add_ship(:E, [:C, :D], {33, 33})
 
-    "Network initialized! 5 ships with different initial data."
+    "Network initialized! 5 ships with different peers."
   end
 
 
@@ -36,6 +36,20 @@ defmodule Demo do
   """
   def add_ship(ship_id, peers, coords \\ {0,0}) do
     {:ok, _} = SafetyNet.start_link(ship_id, peers, coords)
+  end
+
+  @doc"""
+  Adds n ships with random coordinates and one random peer from an initial list or the already created ships
+  """
+  def add_ships(n, peers) do
+    Enum.reduce(1..n, peers, fn i, acc_peers ->
+      id = "Ship_#{i}"
+      coords = {Enum.random(0..33), Enum.random(0..33)}
+
+      add_ship(id, [Enum.random(acc_peers)], coords)
+
+      [id | acc_peers]
+    end)
   end
 
   @doc"""
