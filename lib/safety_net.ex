@@ -89,6 +89,18 @@ defmodule SafetyNet do
     # Send an update to the lighthouse
     send_update_to_lighthouse(state)
 
+    # Also update the Lighthouse about failed nodes in my membership list, just for visibility
+    failed_peers = Enum.filter(state.peers, fn {_, peer} -> peer.status == :failed end)
+    Enum.each(failed_peers, fn {id, peer} ->
+      SafetyNet.PubSub.broadcast(:ship_update, {
+          id,
+          peer.coords,
+          peer.status,
+          peer.incarnation,
+          nil
+        })
+      end)
+
     schedule(:probe, protocol_period_ms())
     {:noreply, %{state | pending: pending}}
   end
