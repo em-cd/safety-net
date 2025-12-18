@@ -44,7 +44,7 @@ defmodule SafetyNet.Search do
     SafetyNet.PubSub.broadcast(:message, msg)
 
     # If someone else is closer, contact them
-    if closest_id != my_state.id, do: ask_peer(closest_id, my_state, missing_ship_id)
+    if closest_id != my_state.id, do: send_search(closest_id, my_state, missing_ship_id)
 
     # Set search_started to true
     peers =
@@ -60,9 +60,9 @@ defmodule SafetyNet.Search do
     %{my_state | peers: peers, search_status: search_status}
   end
 
-  # Sends a :closer? message to a peer
-  defp ask_peer(ship_id, my_state, missing_ship_id) do
-    GenServer.cast({:global, ship_id}, {:closer?, my_state.id, missing_ship_id, SafetyNet.Gossip.gossip_about(missing_ship_id, my_state)})
+  # Sends a search message to a peer
+  defp send_search(ship_id, my_state, missing_ship_id) do
+    GenServer.cast({:global, ship_id}, {:search, my_state.id, missing_ship_id, SafetyNet.Gossip.gossip_about(missing_ship_id, my_state)})
   end
 
   # Calculates the distance between two ships

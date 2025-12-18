@@ -220,9 +220,9 @@ defmodule SafetyNet do
     end
   end
 
-  # Handle closer?: refute the rumour if it's false, otherwise continue the search for the missing ship
+  # Handle search: refute the rumour if it's false, otherwise continue the search for the missing ship
   @impl true
-  def handle_cast({:closer?, from_id, missing_id, gossip}, my_state) do
+  def handle_cast({:search, from_id, missing_id, gossip}, my_state) do
     my_state = SafetyNet.Gossip.merge(my_state, gossip)
 
     cond do
