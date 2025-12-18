@@ -88,7 +88,8 @@ defmodule SafetyNet do
 
     # If I'm searching for someone, ping them just in case they may be alive
     if state.search_status != nil do
-      SafetyNet.Ping.send_ping(state.search_status, state.id, state)
+      gossip = SafetyNet.Gossip.gossip_about(state.search_status, state)
+      SafetyNet.Ping.send_ping(state.search_status, state.id, state, gossip)
     end
 
     # Send an update to the lighthouse
