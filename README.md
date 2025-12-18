@@ -1,6 +1,6 @@
 # SafetyNet
 
-## Running the code on one terminal
+## Running the code
 
 First install dependencies and start the Mix project in iex:
 
@@ -15,13 +15,15 @@ You can now initialise a demo with:
 Demo.init()
 ```
 
-This should initialise a demo with several ships. To simulate a failure, run:
+This should initialise a demo with several ships. You will see log messages in the terminal. To simulate a failure, run:
 
 ```elixir
 Demo.stop(:A)
 ```
 
-You can also add a new ship with:
+### Adding ships
+
+You can add a new ship with:
 
 ```elixir
 Demo.add_ship(:ship_id, [:ship_2, :ship_3])
@@ -34,9 +36,16 @@ a third argument:
 Demo.add_ship(:ship_id, [:ship_2, :ship_3], {10,10})
 ```
 
+You can also add multiple ships at once, for example:
+
+```elixir
+Demo.add_ships(10, [:ship_2, :ship_3])
+```
+
+
 ## Connecting to the Lighthouse frontend
 
-The Lighthouse is a Phoenix app that uses PubSub to receive broadcasts about the ships and display them.
+The [Lighthouse](https://github.com/em-cd/safety-net-lighthouse) is a Phoenix app that uses PubSub to receive broadcasts about the ships and display them.
 
 Start the Lighthouse with a cookie and a node name, e.g.:
 
@@ -59,7 +68,7 @@ Node.connect(:lighthouse@localhost)
 Now the nodes should be connected. You can start the demo and the ships will broadcast updates to the Lighthouse automatically.
 
 
-## Running on different nodes
+## Running multiple nodes
 
 To create a node:
 
@@ -67,7 +76,7 @@ To create a node:
 iex --sname <node_name> --cookie secret -S mix
 ```
 
-Now at this point if you have the Lighthouse running, you can simply connect each extra node running SafetyNet to the Lighthouse and they will join the network and be able to communicate with ships on other nodes.
+Now at this point if you have the Lighthouse running, you can simply connect each extra node running SafetyNet to the Lighthouse. They will join the network and be able to communicate with ships on other nodes.
 
 If you aren't running the Lighthouse, simply connect nodes to each other:
 
@@ -89,20 +98,3 @@ There are a few tests, you can run them with the following command:
 ```bash
 mix test
 ```
-
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `safety_net` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:safety_net, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/safety_net>.
